@@ -1,0 +1,48 @@
+# https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_tests.html#vault
+
+---
+# MySQL DATABASE
+  # HOST
+mysql_db_host: localhost
+
+  # ACCOUNT
+mysql_root_pwd: root
+mysql_root_user: root
+
+# WP
+mysql_wp_prefix: wp_
+mysql_wp_dbname: wordpress
+mysql_wp_url: 10.133.2.58
+wp_website_name: my_wordpress_website
+wp_website_path: /var/www/html/wordpress
+wp_reset_website: false
+
+# DRUPAL
+mysql_drupal_prefix: drup_
+mysql_drupal_dbname: drupal
+mysql_drupal_url: 10.133.2.58
+drupal_website_name: my_drupal_website
+drupal_website_path: /var/www/html/drupal
+drupal_reset_website: false
+
+# DRUPAL & WP admin account
+cms_admin_user: admin
+cms_admin_pwd: admin
+cms_admin_email: admin@gmail.com
+
+# GRAFANA
+graf_ip: 10.133.2.58
+graf_user: admin
+graf_pwd: admin
+
+
+# POUR LES DONNEES SENSIBLES => ANSIBLE VAULT !! pour crypter les datas
+# commande : $ ansible-vault encrypt [fichier].yml
+
+# Pour utilisation (car demande un mdp vault : celui entré lors du cryptage) voir la commande ci-dessous :
+# commande : $ ansible-playbook [chemin fichier playbook].yml  --ask-vault-pass
+
+# Pour utilisation sans entrer le mdp (stocké en local), voir la commande ci-dessous :
+# commande : $ ansible-playbook [chemin fichier playbook].yml  --vault-password-file     [chemin du fichier contenant le mdp du fichier vault].txt
+
+

@@ -1,0 +1,6 @@
+# Ce fichier n'est qu'un exemple. (voir sshd.yml)
+# Il est possible d'utiliser cette méthode de configuration pour tout type de configuration manuelle
+# Possibilité de configurer les adresses des interfaces réseaux comme ceci. 
+# (même s'il existe une collection spécifique dans ansible ;) : https://docs.ansible.com/ansible/latest/collections/community/general/interfaces_file_module.html#ansible-collections-community-general-interfaces-file-module)
+
+https://guillaumebriday.fr/installer-et-utiliser-les-gitlab-runners

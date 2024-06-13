@@ -1,0 +1,2 @@
+Avec Semaphore, tout se lance à partir de la home diretory de l'utilisateur. 
+exemple : /home/loic

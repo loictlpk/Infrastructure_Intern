@@ -1,0 +1,10 @@
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/reboot_module.html
+
+--- 
+- hosts: vsphere_vms 
+  become: yes # execution des taĉhes à exécuter avec "sudo" (ou "en tant qu'admin")
+  name: "reboot"
+
+  tasks:
+    - name: Reboot immediat
+      ansible.builtin.reboot:

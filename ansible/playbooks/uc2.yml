@@ -1,0 +1,90 @@
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/service_module.html#ansible-collections-ansible-builtin-service-module
+# https://wiki.debian.org/WordPress
+# https://wiki.debian.org/Drupal
+# https://www.drupal.org/documentation/install/developers
+# https://www.howtoforge.com/how-to-install-drupal-on-debian-12/
+# https://www.cyberciti.biz/faq/how-do-i-test-php-installation-with-a-phpinfo-page/
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/file_module.html
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/copy_module.html
+
+---
+- hosts: vsphere_vms
+  become: yes # execution des taĉhes à exécuter avec "sudo" (ou "en tant qu'admin")
+  name: "Use case 2: Installation d'une stack LAMP (apache + php + mysql)"
+
+  handlers:
+    - import_tasks: ../handlers/maj.yml        
+
+  tasks:
+  - name: dependances pour la nouvelle version de php (paquet "SURY")
+    ansible.builtin.shell:
+      cmd: |
+        echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/sury-php.list
+        curl -fsSL  https://packages.sury.org/php/apt.gpg| sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-keyring.gpg --yes
+    notify: "maj pkg"
+    
+  - name: force update for SURY
+    ansible.builtin.import_tasks: ../tasks/force_maj.yml
+
+  - name: "LAMP: Installation des services"
+    apt:
+      name:
+        - software-properties-common
+        - ca-certificates 
+        - lsb-release 
+        - apt-transport-https
+
+      # APACHE (serveur web) httpd (pas pour debian) ou apache2
+        - apache2
+        # - httpd
+
+      # PHP (production de page web : pour les rendre dynamique (pas uniquement du html et du css))
+        - php8.3 # IMPORTANT : DERNIERE VERSION POUR DRUPAL  - NECESSITE MAJ DES PKG
+        - libapache2-mod-php8.3
+        - php8.3-fpm
+        - php8.3-cgi
+        - php8.3-mysql
+        - php8.3-zip
+        - php8.3-soap
+        - php8.3-intl
+        - php8.3-curl
+        - php8.3-gd
+        - php8.3-dom
+        - php8.3-xml
+        - php8.3-pdo
+        - php8.3-mbstring
+        # - python # Pas reconnu
+        - python3-pip
+
+      # MARIADB/ MySQL (base de données)
+        - mariadb-server
+      state: latest
+    notify: "maj pkg"
+    become: true
+
+    # DEMARRAGE ET ACTIVATION DES SERVICES
+  - name: "LAMP: activation d'apache2 (serveur web)"
+    ansible.builtin.service:
+      name: apache2
+      state: started
+      enabled: true
+
+# MARIADB
+  - name: "LAMP: activation de mariadb (base de donnée)"
+    ansible.builtin.service:
+      name: mariadb
+      state: restarted
+      enabled: true
+
+  - name: Install mysqlclient avec pip3 #https://docs.ansible.com/ansible/latest/collections/ansible/builtin/get_url_module.html#ansible-collections-ansible-builtin-get-url-module
+    ansible.builtin.pip:  
+      name: 
+        - PyMySQL
+        - pymssql
+      state: latest
+    notify: "maj pkg"
+
+
+- ansible.builtin.import_playbook: ./uc3_wordpress.yml
+- ansible.builtin.import_playbook: ./uc3_drupal.yml
+

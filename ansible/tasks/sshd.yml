@@ -1,0 +1,27 @@
+# https://linuxize.com/post/how-to-setup-passwordless-ssh-login/#:~:text=Disabling%20SSH%20Password%20Authentication%201%20Log%20into%20your,the%20file%20and%20restart%20the%20SSH%20service.%20
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/lineinfile_module.html
+# https://www.javainuse.com/rexgenerator
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/service_module.html#ansible-collections-ansible-builtin-service-module
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/blockinfile_module.html (MIEUX)
+---
+
+# Modifucation du fichier de configuration ssh
+- name: modif fichier sshd
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "PermitEmptyPasswords yes" #Ajout de ligne au fichier
+    state: present
+
+# sshd 
+- name: Demarrage sshd
+  ansible.builtin.service:
+    name: sshd
+    state: started
+    enabled: true
+
+# redémarrage du service ssh
+- name: restart sshd
+  ansible.builtin.service:
+    name: sshd
+    enabled: true
+    state: restarted

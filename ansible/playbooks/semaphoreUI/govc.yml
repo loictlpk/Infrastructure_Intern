@@ -1,0 +1,19 @@
+# https://docs.ansible.com/ansible/latest/reference_appendices/logging.html#protecting-sensitive-data-with-no-log
+
+---
+- hosts: localhost
+  # connection: local
+  # become: yes
+  name: start vSphere VM
+
+  vars_files: vars/govc_password_vaulted.yml
+
+  vars:
+    path: Bureau/STAGES/UC_TF/infrastructure/ansible/playbooks/semaphoreUI/scripts/
+  
+  tasks:
+  - name: export vars
+    ansible.builtin.shell:
+      cmd: bash '{{path}}'govc.sh '{{govc_password}}'
+    no_log: true
+

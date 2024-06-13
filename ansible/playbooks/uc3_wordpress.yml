@@ -1,0 +1,164 @@
+# https://www.it-connect.fr/mysql-mariadb-modifier-le-mot-de-passe-root/
+# https://github.com/eslam-gomaa/mysql_secure_installation_Ansible
+# https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_db_module.html#ansible-collections-community-mysql-mysql-db-module
+# https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_user_module.html
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/get_url_module.html#ansible-collections-ansible-builtin-get-url-module
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/unarchive_module.html
+# https://www.it-connect.fr/installation-de-wordpress-sous-linux/
+# https://developer.wordpress.org/advanced-administration/
+# https://www.hostinger.fr/tutoriels/wp-config-php
+# https://wp-cli.org/#installing
+# https://developer.wordpress.org/cli/commands/
+
+---
+- hosts: vsphere_vms
+  become: yes
+  name: "Automatisation du CMS Wordpress"
+
+  vars_files: 
+    - ../vars/variables.yml
+    - ../vars/generated_vs_vault.yml
+
+  handlers:
+    - import_tasks: ../handlers/apache.yml        
+
+  tasks: 
+    # Avec le shell car le module apt ne détecte pas le paquet python 
+    - name: "Installation de python"
+      ansible.builtin.shell:
+        cmd: "apt install -y python"
+
+    - name: "reset wordpress website : DB"
+      community.mysql.mysql_db:
+        name: '{{mysql_wp_dbname}}'
+        login_user: '{{mysql_root_user}}'
+        login_password: '{{mysql_root_pwd}}'
+        state: absent
+      when: drupal_reset_website | bool
+    
+    # - name: "reset wordpress website : DB"
+    #   ansible.builtin.shell:
+    #     cmd: wp db drop --yes --path={{wp_website_path}}
+    #   when: drupal_reset_website | bool
+
+    - name: "remove default html page"
+      ansible.builtin.file:
+        path: /var/www/html/index.html
+        state: absent
+
+    - name: "Creation d'un dossier pour Wordpress"
+      ansible.builtin.file:
+        path: /var/www/html/wordpress
+        state: directory
+        recurse: yes
+    # AVANT, il faut lancer la commande : $ mysql_secure_installation
+    # Elle permet d'initialiser un mdp à root pour pouvoir utiliser la collection mysql
+
+    # Le module "mysql_secure_installation" utilise la commande $ mysql_secure_installation 
+    # Grâce à un module python crée par un tiers :  https://github.com/eslam-gomaa/mysql_secure_installation_Ansible
+    # le module est importé dans le fichier : library/mysql_secure_installation.py
+    - name: "Changement du mdp root de mysql cmd : $ mysq_secure_installation"
+      mysql_secure_installation:
+          login_password: '' # aucun mdp à la base
+          # new_password: root 
+          new_password: '{{mysql_root_user_vaulted}}'
+          user: '{{mysql_root_user}}'
+          login_host: '{{mysql_db_host}}'
+     
+    - name: "Creation d'une DB"
+      community.mysql.mysql_db:
+        name: '{{mysql_wp_dbname}}'
+        login_user: root
+        # login_password: root 
+        login_password: '{{mysql_root_user_vaulted}}'
+        state: present 
+        # config_file: /secure/dbcredentials    # Utilisé pour se connecter grâce à un fichier contenant le mdp et le username de l'utilisateur de la db (root)
+                                              #   Si Vault est utilisé, il bloque l'utilisation de ce fichier
+
+    - name: "Ajout d'un utilisateur admin à mysql : test"
+      community.mysql.mysql_user:
+        login_user: root
+        # login_password: root 
+        login_password: '{{mysql_root_user_vaulted}}'
+        # config_file: /secure/dbcredentials
+        name: admin
+        password: admin
+        priv: "*.*:ALL"
+        state: present
+
+    - name: "copie de la configuration host Wordpress"
+      ansible.builtin.copy:
+        src: ../../conf_files/apache2/general_vhost.conf # fichier dans le repo actuel
+        dest: /etc/apache2/sites-enabled/general_vhost.conf # vers la machine
+      notify: "restart apache"
+
+# AUTOMATISATION DE WORDPESS (installation de wp-cli): https://wp-cli.org/#installing
+    # wpcli-core (installe wordpress) et wpcli-config (configure wp_config.php)
+    # Il est possible d'éviter les étapes précédentes avec wp-cli car il administre le fichier de config php  de wordpress.
+    - name: "Téléchargement de wp-cli"
+      ansible.builtin.get_url:
+        url: " https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
+        dest: "/tmp/wp-cli.phar"
+
+    - name: "copie de wp-cli"
+      ansible.builtin.copy:
+        src: "/tmp/wp-cli.phar"
+        dest: /usr/local/bin/wp
+        remote_src: yes
+        mode: '755'
+      ignore_errors: "{{ ansible_check_mode }}"
+
+  # Need module_utils files from https://github.com/jasondewitt/ansible-wpcli-wrapper/tree/master
+  # https://developer.wordpress.org/cli/commands/core/ 
+    - name: download wp core
+      wpcli_core:
+        path: '{{wp_website_path}}'
+        action: download
+
+    - name: config de wp 
+      wpcli_config:
+        path: '{{wp_website_path}}'
+        action: create
+        dbhost: '{{mysql_db_host}}'
+        dbname: '{{mysql_wp_dbname}}'
+        dbuser: '{{mysql_root_user}}'
+        dbpass: '{{mysql_root_pwd}}'
+        dbprefix: '{{mysql_wp_prefix}}'
+      become: true
+
+
+    - name: configuration de wordpress
+      wpcli_core:
+        path: '{{wp_website_path}}'
+        action: install
+        title: '{{wp_website_name}}'
+        url: '{{mysql_wp_url}}'
+        admin_user: '{{cms_admin_user}}'
+        admin_email: '{{cms_admin_email}}'
+        admin_password: '{{cms_admin_pwd}}'
+
+    # Les plugins installés concernant wp-cli ne peuvent pas gérer les thèmes et plugins donc obliger d'utiliser le shell
+    #Il faut que le site soit configurer de base pour que ça fonctionne
+    # Ne pas utiliser en tant que root. Mais possible avec le flag " --allow-root "
+    
+    # https://developer.wordpress.org/cli/commands/plugin/
+    - name: installation de plugins et activation
+      ansible.builtin.shell:
+        cmd: wp --allow-root --path={{wp_website_path}} plugin install bbpress cloudflare user-menus wp-statistics --activate
+
+    # https://developer.wordpress.org/cli/commands/theme/
+    - name: installation de themes et activation
+      ansible.builtin.shell:
+        cmd: wp --allow-root --path={{wp_website_path}}  theme install screenr --activate
+
+    - name: installation de themes
+      ansible.builtin.shell:
+        cmd: wp --allow-root --path={{wp_website_path}}  theme install twentyeleven
+
+
+    - name: "Droits pour Wordpress - Securite"
+      ansible.builtin.file:
+        path: '{{wp_website_path}}'
+        mode: '755'
+        state: directory
+        recurse: yes

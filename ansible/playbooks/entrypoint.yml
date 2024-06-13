@@ -1,0 +1,45 @@
+#  commande : $ ansible-playbook playbook.yml 
+
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/user_module.html
+# https://docs.ansible.com/ansible/latest/collections/community/general/sudoers_module.html
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/password_hash_filter.html
+
+---
+- hosts: vsphere_vms
+  become: yes
+  name: Administration VM Linux Debian11
+
+  vars_files: ../vars/vaulted_vars.yml
+
+  tasks:
+  # Ne fonctionne pas sous debian
+  - name: set belgian keyboard
+    ansible.builtin.shell:
+      cmd: localectl set-keymap be
+      
+  # - name: add vagrant to sudoers # Déjà sudoers par défaut
+  #   community.general.sudoers:
+  #     name: vagrant user
+  #     state: present
+  #     user: vagrant
+  #     commands: ALL
+
+  - name: create user
+    ansible.builtin.user:
+      name: loic
+      shell: /bin/bash
+      password: "{{ loic_password | password_hash('sha512')}}"  #Nécessite d'être hashé (voir fichier /etc/shadow)
+      state: present
+
+  - name: add loic to sudoers
+    community.general.sudoers:
+      name: loic user
+      state: present
+      user: loic
+      commands: ALL
+
+- ansible.builtin.import_playbook: ./uc1.yml
+- ansible.builtin.import_playbook: ./uc2.yml
+- ansible.builtin.import_playbook: ./uc_perso.yml
+- ansible.builtin.import_playbook: ./reboot.yml
+

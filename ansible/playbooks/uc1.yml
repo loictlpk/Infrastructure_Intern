@@ -1,0 +1,71 @@
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html
+
+---
+# si "hosts: debian" alors il faut démarrer le playbook avec la commande ci-dessous :
+# commande : $ ansible-playbook -i [chemin fichier inventory]   [chemin fichier playbook].yml
+- hosts: vsphere_vms # sélection de la VM dépend du fichier se trouvant dans /etc/ansible/ansible.cfg
+  become: yes # execution des taĉhes à exécuter avec "sudo" (ou "en tant qu'admin")
+  name: "Use case 1 : mise en place - gestion des paquets et des utilisateurs"
+
+  handlers:
+    - import_tasks: ../handlers/maj.yml              
+
+  tasks:
+  - name: MAJ clavier
+    import_tasks: ../tasks/be_keyboard.yml      
+
+  - name: Service SSH
+    import_tasks: ../tasks/sshd.yml     
+
+  - name: Install APP
+    apt:
+      name: 
+        - ansible
+        - sudo
+        - tree
+        - gpm
+        - nano
+        - mc
+        - htop
+        - lynx
+      state: present
+    notify: "maj pkg"
+
+  - name: Creation de groupe
+    ansible.builtin.group:
+      name: admin
+      state: present
+      
+# La création d'un utilisateur en tant que root est déconseillé ! il est préférable qu'il ne soit pas root. 
+# Ce n'est qu'un test. Il vaut mieux laisser par défaut le uid. Le groupe, doit être définit dans sudo pour les droits
+# Il existe une collection qui gère les sudoers (utilisateurs sudo) : https://docs.ansible.com/ansible/latest/collections/community/general/sudoers_module.html#ansible-collections-community-general-sudoers-module
+  - name: "Creation utilisateur equivalent à root sans password et avec les droits sudo"
+    ansible.builtin.user:
+      name: admin
+      non_unique: true # Permet d'ajouter le user comme second utilisateur "root" = vrai admin
+      uid: 0      
+      group: root 
+      groups:
+        - sudo # ajoute dans le groupe sudo : autorise l'utilisation de la commande sudo
+        - admin # ajout au groupe admin précédemment créer
+      password: '' # utilisateur Passwordless
+      home: /home/admin
+      shell: /bin/bash
+      generate_ssh_key: yes
+      ssh_key_bits: 2048
+      ssh_key_file: /home/admin/.ssh/id_rsa
+      # ssh_key_passphrase: 'admin'
+      system: true
+      state: present
+
+  - name: Creation utilisateur ssh avec les droits sudo
+    ansible.builtin.user:
+      name: loic
+      groups:
+        - sudo # ajoute dans le groupe sudo : autorise l'utilisation de la commande sudo
+        - admin # ajout au groupe admin précédemment créer
+      password: '' # utilisateur Passwordless
+      shell: /bin/bash
+      generate_ssh_key: yes
+      ssh_key_bits: 2048
+      state: present

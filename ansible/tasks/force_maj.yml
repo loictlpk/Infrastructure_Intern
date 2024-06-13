@@ -1,0 +1,10 @@
+---
+- name: Vérifier les mises à jour
+  apt: 
+    update_cache: yes
+  become: true
+
+- name: maj des pkg
+  apt: 
+    upgrade: yes
+  become: true

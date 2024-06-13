@@ -1,0 +1,6 @@
+---
+- name: "LAMP: activation d'apache2 (serveur web)"
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+    enabled: true

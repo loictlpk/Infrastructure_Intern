@@ -1,0 +1,61 @@
+# https://docs.ansible.com/ansible/latest/collections/community/grafana/index.html
+# https://docs.ansible.com/ansible/latest/collections/community/grafana/grafana_datasource_module.html#ansible-collections-community-grafana-grafana-datasource-
+# https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/
+# https://docs.ansible.com/ansible/latest/collections/community/general/ini_file_module.html
+# https://les-enovateurs.com/grafana-surveiller-analyser-donnees-web
+# https://grafana.com/grafana/dashboards/?search=wordpress
+# https://docs.ansible.com/ansible/latest/collections/community/grafana/grafana_dashboard_module.html#ansible-collections-community-grafana-grafana-dashboard-module
+# https://docs.ansible.com/ansible/latest/collections/community/grafana/grafana_plugin_module.html#ansible-collections-community-grafana-grafana-plugin-module
+# https://grafana.com/docs/grafana/v7.2/plugins/installation/
+# https://grafana.com/grafana/plugins/
+---
+# Par defaut, le user: "admin" et le mdp: "admin"
+- hosts: vsphere_vms
+  become: yes
+  name: Configuration de Granfana
+
+  vars_files: 
+    - ../vars/variables.yml
+    - ../vars/generated_vs_vault.yml
+  
+  handlers:
+    - import_tasks: ../handlers/apache.yml
+
+  tasks:
+
+  - name: "configuration de grafana.ini : grafana acces to enp0s10"
+    community.general.ini_file:
+      path: /etc/grafana/grafana.ini
+      section: server
+      option: http_addr
+      value: '{{graf_ip}}'
+      backup: false
+
+  - name: create mysql datasource
+    community.grafana.grafana_datasource:
+      name: wordpress-db
+      database: '{{mysql_wp_dbname}}'
+      ds_type: mysql
+      ds_url: '{{graf_ip}}'
+      user: '{{mysql_root_user_vaulted}}'
+      password: '{{mysql_root_pwd_vaulted}}'
+      grafana_user: '{{graf_user}}'
+      grafana_password: '{{graf_pwd}}'
+      grafana_url: http://{{graf_ip}}:3000/
+
+# POUR POUVOIR UTILISER le DashBoard importé, 
+# le plugin "wp-statistics" doit être installé (voir playbook wp)  
+  
+  - name: install wordpress dashboard
+    community.grafana.grafana_dashboard:
+      dashboard_id: 13191 # id du dashboard wordpress
+      grafana_url: http://{{graf_ip}}:3000/
+      state: present
+      url_username: '{{graf_user}}'
+      url_password: '{{graf_pwd}}'
+      # overwrite: true # évite un message d'erreur
+
+  - name: installation plugin grafana
+    community.grafana.grafana_plugin:
+      name: marcusolsson-calendar-panel
+      state: present

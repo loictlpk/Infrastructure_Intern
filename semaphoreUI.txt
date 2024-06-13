@@ -1,0 +1,6 @@
+semaphore et ansible
+>>> https://docs.semui.co/administration-guide/installation
+>>> https://docs.semui.co/administration-guide/configuration
+
+    Diponible : http://localhost:3000/
+    https://www.youtube.com/watch?v=l0IxfzKUTo8&t=88s

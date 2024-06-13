@@ -1,0 +1,21 @@
+# https://docs.ansible.com/ansible/latest/reference_appendices/logging.html#protecting-sensitive-data-with-no-log
+
+---
+- hosts: localhost
+  # connection: local
+  # become: yes
+  name: create vSphere VM
+
+  vars_files: vars/tf_password_vaulted.yml
+  
+  vars:
+    path: Bureau/STAGES/UC_TF/infrastructure/ansible/playbooks/semaphoreUI/scripts/
+
+  tasks:
+  - name: export vars
+    ansible.builtin.shell:
+      cmd: bash '{{path}}'terraform.sh '{{tf_password}}'
+    ignore_errors: true # Une erreur se produit à cause de la VM qui ne démarre pas. Par contre, elle est créée et peut être démarrée par GOVC
+    no_log: true
+
+      

@@ -1,0 +1,7 @@
+
+# le fichier "vaulted_vars.yml" a été généré avec le module ansible-vault de vscode
+# Fichier original 
+
+
+---
+loic_password: loic

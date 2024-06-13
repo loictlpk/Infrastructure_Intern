@@ -1,0 +1,12 @@
+---
+- name: Vérifier les mises à jour
+  apt: 
+    update_cache: yes
+  register: apt_update
+  listen: "maj pkg"
+  
+- name: maj des pkg
+  apt: 
+    upgrade: yes
+  when: apt_update.changed
+  listen: "maj pkg"

@@ -1,0 +1,251 @@
+# https://www.drupal.org/documentation/install/developers
+# https://docs.ansible.com/ansible/latest/collections/community/mysql/mysql_query_module.html#ansible-collections-community-mysql-mysql-query-module
+# https://www.drupal.org/documentation/install/advanced-multisite
+# https://computingforgeeks.com/install-and-configure-drupal-cms-on-debian/
+# https://www.drupal.org/docs/getting-started/installing-drupal
+# https://www.digitalocean.com/community/tutorials/how-to-rewrite-urls-with-mod_rewrite-for-apache-on-ubuntu-20-04
+# https://www.drupal.org/docs/7/install/step-3-create-settingsphp-and-the-files-directory#s-manual-settingsphp-overview
+# https://www.drupal.org/docs/7/install/step-3-create-settingsphp-and-the-files-directory#s-manual-settingsphp-detailed-instructions
+# https://docs.ansible.com/ansible/latest/collections/community/general/composer_module.html
+# https://www.drupal.org/docs/develop/using-composer/using-composer-with-drupal
+# https://getcomposer.org/download/
+# https://getcomposer.org/doc/00-intro.md
+# https://www.drush.org/12.x/install/
+# https://www.youtube.com/watch?v=ZqY_XsCTmAc
+# https://www.digitalocean.com/community/tutorials/a-beginner-s-guide-to-drush-the-drupal-shell
+# https://www.drush.org/12.x/install/
+# https://www.drupal.org/docs/develop/using-composer/manage-dependencies
+# https://github.com/drush-ops/drush-launcher
+# https://github.com/berenddeboer/ansible-drush-module/tree/master
+# https://www.drupal.org/docs/extending-drupal/installing-modules-from-the-command-line
+# https://www.drupal.org/docs/user_guide/en/extend-theme-install.html
+# https://www.drupal.org/docs/user_guide/en/install-composer.html
+# https://drupalize.me/tutorial/enable-update-and-manage-modules-and-themes-drush
+
+---
+# !!!!!!!!!!! NE PAS OUBLIER DE MODIFIER MANUELLEMENT LA PAGE PHP !!!!!!!!!!!!!!
+
+- hosts: vsphere_vms
+  become: yes
+  name: "Run automatisation du CMS Drupal"
+
+  vars_files: ../vars/variables.yml
+
+  handlers:
+    - import_tasks: ../handlers/apache.yml
+  
+  tasks:
+# config mysql 
+    - name: "Creation d'une DB"
+      community.mysql.mysql_db:
+        name: '{{mysql_drupal_dbname}}'
+        login_user: '{{mysql_root_user}}'
+        login_password: '{{mysql_root_pwd}}'
+        state: present 
+
+    - name: privileges DB drupal
+      community.mysql.mysql_query:
+        login_db: '{{mysql_drupal_dbname}}'
+        login_user: '{{mysql_root_user}}'
+        login_password: '{{mysql_root_pwd}}'
+        query: 
+          - GRANT ALL ON drupal.* TO 'root'@'localhost' IDENTIFIED BY 'root';
+          - FLUSH PRIVILEGES;
+        single_transaction: true
+
+
+
+# Fichiers de configuration apache
+    - name: enable clean URL - mod_rewrite of apache2
+      ansible.builtin.shell:
+        cmd: a2enmod rewrite
+
+    - name: "Droits pour Drupal"
+      ansible.builtin.file:
+        path: /var/www/html
+        mode: '777'
+        state: directory
+        recurse: yes
+
+    - name: "copie de la configuration de ports Drupal"
+      ansible.builtin.copy:
+        src: ../../conf_files/apache2/ports.conf # fichier dans le repo actuel
+        dest: /etc/apache2/ports.conf # vers la machine
+      notify: "restart apache"
+
+    - name: "copie de la configuration host Drupal"
+      ansible.builtin.copy:
+        src: ../../conf_files/apache2/general_vhost.conf # fichier dans le repo actuel
+        dest: /etc/apache2/sites-enabled/general_vhost.conf # vers la machine
+      notify: "restart apache"
+
+
+# Config drupal
+    - name: Vérifier si composer existe
+      stat:
+        path: /usr/local/bin/composer
+      register: composer_binary
+
+    - name: install composer for php
+      ansible.builtin.shell:
+        cmd: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          php -r "if (hash_file('sha384', 'composer-setup.php') === 'dac665fdc30fdd8ec78b38b9800061b4150413ff2e3b6f88543c636f7cd84f6db9189d43a81e5503cda447da73c7e5b6') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
+          php composer-setup.php
+          php -r "unlink('composer-setup.php');"
+          sudo mv composer.phar /usr/local/bin/composer
+      when: not composer_binary.stat.exists
+
+    - name: Vérifier si le dossier Drupal existe
+      stat:
+        path: '{{drupal_website_path}}'
+      register: drupal_folder
+
+    # https://packagist.org/?query=drush
+    - name: Installer Drupal avec Composer (gère les dépencances, etc. plus simple pour l'installation)
+      community.general.composer:
+        command: create-project 
+        arguments: drupal/recommended-project drupal 
+        working_dir: /var/www/html
+        ignore_platform_reqs: true        
+      become: no 
+      when: not drupal_folder.stat.exists 
+
+    - name: Vérifier si le dossier Drush existe
+      stat:
+        path: '{{drupal_website_path}}/vendor/drush'
+      register: drush_folder
+
+    - name: install drush for Drupal
+      community.general.composer:
+        command: require
+        arguments: drush/drush
+        working_dir: '{{drupal_website_path}}'
+        ignore_platform_reqs: true
+      become: no
+      when: not drush_folder.stat.exists 
+
+    - name: "Move drupal default php files"
+      ansible.builtin.copy:
+        src: ../../conf_files/drupal/settings.php
+        dest: '{{drupal_website_path}}/web/sites/default/settings.php'
+        # BASIC       :   /var/www/html/drupal/sites/default/settings.php  
+        # AVEC DRUSH  :   /var/www/html/drupal/web/sites/default/settings.php
+    
+    - name: "Creation d'un dossier translations pour Drupal"
+      ansible.builtin.file:
+        path: '{{drupal_website_path}}/sites/default/files/translations'
+        state: directory
+        mode: '777' 
+    
+    - name: "Droits pour Drupal - Pour Ansible"
+      ansible.builtin.file:
+        path: '{{drupal_website_path}}'
+        mode: '777'
+        state: directory
+        recurse: yes
+
+    - name: Vérifier si drush existe
+      stat:
+        path: /usr/local/bin/drush
+      register: drush_binary
+
+    - name: placement du bianire drush dans le dossier bin
+      ansible.builtin.copy:
+        src: ../../conf_files/drupal/drush.sh
+        dest: "/usr/local/bin/drush"
+        mode: "755"
+      when: not drush_binary.stat.exists
+
+    # - name: Reset admin password (working for all users)
+    #   drush:
+    #     path: /var/www/html/drupal
+    #     command: user:password admin 'admin'
+
+    # Composer est associé à un projet Drupal et Drush est associé à un site web Drupal. 
+    # (Composer appel des dépendances PHP pour Drupal et Drush gère les thèmes, modules, etc. d'un site Drupal)
+    # Exemple : Composer installe des thèmes et Drush les administre
+
+    - name: "reset drupal website : DB"
+      community.mysql.mysql_db:
+        name: '{{mysql_drupal_dbname}}'
+        login_user: '{{mysql_root_user}}'
+        login_password: '{{mysql_root_pwd}}'
+        state: absent
+      when: drupal_reset_website | bool
+
+    # https://www.drush.org/12.x/commands/site_install/
+    - name: Automation de la config Drupal avec Drush
+      drush:
+        path: '{{drupal_website_path}}'
+        command: site:install --db-url={{mysql_drupal_url}} --db-prefix={{mysql_drupal_prefix}} --db-su={{mysql_root_user}} --db-su-pw={{mysql_root_pwd}} --site-name={{drupal_website_name}} --account-name={{cms_admin_user}} --account-pass={{cms_admin_pwd}} --account-mail={{cms_admin_email}} --yes
+      ignore_errors: true # LA commande fonctionne. Cependant, si le site (db) existe il y a erreur donc on ignore
+      
+
+  # ################################# THEMES #################################
+    # ANNUAIRE DES THEMES : https://www.drupal.org/project/project_theme
+    # https://www.drush.org/12.x/commands/all/
+    # https://www.drush.org/12.x/commands/theme_install/#arguments
+
+    - name: Composer installation des thèmes
+      community.general.composer:
+        command: require
+        arguments: drupal/honey drupal/gin_toolbar:^1.0@rc drupal/gin:^3.0@rc drupal/bootstrap
+        working_dir: '{{drupal_website_path}}'
+        ignore_platform_reqs: true
+      become: no
+
+    - name: Composer MAJ des thèmes
+      community.general.composer:
+        command: update
+        arguments: drupal/honey drupal/gin_toolbar:^1.0@rc drupal/gin:^3.0@rc drupal/bootstrap
+        working_dir: '{{drupal_website_path}}'
+        ignore_platform_reqs: true
+      become: no
+
+    - name: Drush Active le theme par defaut
+      drush:
+        path: '{{drupal_website_path}}'
+        command: theme:enable honey bootstrap gin 
+      check_mode: false
+
+    - name: Drush Applique du theme par defaut
+      drush:
+        path: '{{drupal_website_path}}'
+        command: config-set system.theme default bootstrap
+      check_mode: false
+  ############################################################################
+
+
+  # ################################ MODULES #################################
+    # ANNUAIRE DES MODULES : https://www.drupal.org/project/project_module
+    # pm:list - Shows a list of available extensions (modules and themes).
+    # pm:enable - Enables one or more modules.
+    # pm:security - Checks Drupal Composer packages for pending security updates.
+    # pm:security-php - Checks non-Drupal PHP packages for pending security updates.
+    # pm:uninstall - Uninstalls one or more modules and their dependent modules.
+
+    - name: Installation de modules
+      community.general.composer:
+        command: require 
+        arguments: drupal/recaptcha drupal/honeypot
+        working_dir: '{{drupal_website_path}}'
+        ignore_platform_reqs: true
+      become: no 
+    
+    - name: Activation et application des modules
+      drush:
+        path: '{{drupal_website_path}}'
+        command: pm:enable recaptcha honeypot
+      check_mode: false        
+  ############################################################################
+
+
+# END- EVITE LES FAILLES DE SECURITE EN ECRITURE
+    - name: "Droits pour Drupal - Securite"
+      ansible.builtin.file:
+        path: '{{drupal_website_path}}'
+        mode: '755'
+        state: directory
+        recurse: yes
+

@@ -1,0 +1,9 @@
+# https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_handlers.html
+
+---
+- name: "LAMP: activation d'apache2 (serveur web)"
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+    enabled: true
+  listen: "restart apache"

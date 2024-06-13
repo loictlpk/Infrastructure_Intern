@@ -1,0 +1,69 @@
+# Grafana est une application d'analyse de données sous forme de graphe
+# https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/
+
+---
+- hosts: vsphere_vms
+  become: yes
+  name: Automatisation de Granfana
+
+  handlers:
+    - import_tasks: ../handlers/maj.yml       
+
+  tasks:
+  - name: Installation des annuaires apt pour grafana
+    ansible.builtin.apt:
+      name:
+        - apt-transport-https
+        - software-properties-common
+        - wget
+      state: present
+    notify: "maj pkg"
+
+  - name: Dossier pour gpg
+    file:
+      path:  /etc/apt/keyrings/
+      state: directory 
+
+  - name: "import clé gpg"
+    ansible.builtin.shell:
+      cmd: | 
+        wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee -a /etc/apt/sources.list.d/grafana.list
+    notify: "maj pkg"
+
+  - name: Vérifier les mises à jour
+    apt: 
+      update_cache: yes
+    register: apt_update
+    
+  - name: force maj searches
+    apt: 
+      upgrade: yes
+    when: apt_update.changed
+
+  - name: force maj update
+    ansible.builtin.apt:
+      name: grafana
+      state: present
+    notify: "maj pkg"      
+
+
+  - name: "grafana init"
+    ansible.builtin.systemd:
+      daemon_reload: true
+      
+  - name: "grafana start"
+    ansible.builtin.systemd:
+      name: grafana-server.service
+      state: started
+      enabled: yes
+
+  - name: "grafana enable"
+    ansible.builtin.systemd:
+      name: grafana-server.service
+      enabled: yes
+
+- ansible.builtin.import_playbook: ./uc_perso_grafana.yml
+      
+
+

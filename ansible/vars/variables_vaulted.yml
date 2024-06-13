@@ -1,0 +1,9 @@
+# https://devopssec.fr/article/vaults-ansible
+# dans vscode, il y a une extension vault ansible : CTRL + p  & "> vault" & sélectionner crypté avec ansible vault
+# Ce sont les variables que Ansible vault a crypté
+# DISPONIBLE DANS LE FICHIER vars/generated_vs_vault.yml
+
+---
+mysql_root_user_vaulted: "root"
+mysql_root_pwd_vaulted: "root"
+

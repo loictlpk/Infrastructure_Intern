@@ -1,0 +1,22 @@
+---
+- name: Installer les app pour le clavier
+  apt:
+    name: 
+      - keyboard-configuration
+      - console-setup
+    state: present
+
+- name: Vérifier la configuration du clavier
+  ansible.builtin.shell:
+    cmd: cat /etc/default/keyboard
+  register: keyboard_config
+
+# appliqué au redémarrage de la machine
+- name: "Appliquer le type de clavier : belge"
+  ansible.builtin.shell:
+    cmd: |
+      echo -e 'XKBMODEL="pc105"\nXKBLAYOUT="be"\nXKBVARIANT=""\nXKBOPTIONS=""\nBACKSPACE="guess"\n' | tee /etc/default/keyboard
+      DEBIAN_FRONTEND=noninteractive dpkg-reconfigure keyboard-configuration
+      service keyboard-setup restart
+      udevadm trigger --subsystem-match=input --action=change 
+  when: "'XKBLAYOUT=\"be\"' not in keyboard_config.stdout"
